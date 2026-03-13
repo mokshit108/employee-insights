@@ -136,22 +136,25 @@ The merge in `DetailsPage.mergeAuditImage`:
 
 ## Geospatial Mapping
 
-City coordinates are stored as manual percentage offsets (`x`, `y` in 0–100 range) derived from approximate lat/lng projections of each city onto the SVG viewBox (`0 0 900 440`). The transform applied is:
+The dashboard uses **Leaflet.js** for interactive geospatial visualization. 
 
-```
-cx = city.x × 6.5
-cy = city.y × 4.3
-```
+### Coordinate Mapping Logic
+Cities are projected onto the map using a static lookup table in `src/constants.js`. Each city is mapped to its real-world latitude and longitude:
+- **Source**: `CITY_COORDINATES` constant.
+- **Implementation**: We iterate over the `salaryByCity` dataset and use `L.circleMarker` to place visual indicators at the exact `[lat, lng]` coordinates. 
+- **Dynamic Styling**: Marker radius is calculated dynamically: `8 + (count / 10)`, giving a visual representation of workforce density.
 
-Bubble radius scales with employee count: `r = 8 + min(18, count × 0.9)`.
-
-No map library is used — the outline is a hand-traced SVG `<path>` approximating India's silhouette.
+The map uses a custom dark-themed tile layer (CartoDB Dark Matter) to maintain the dashboard's premium aesthetic.
 
 ---
 
 ## Credentials
 
-```
-Username: testuser
-Password: Test123
-```
+### Application Login (Auth Provider)
+- **Username**: `testuser`
+- **Password**: `Test123`
+
+### Backend API Payload (POST)
+- **Username**: `test`
+- **Password**: `123456`
+- **Endpoint**: `https://backend.jotish.in/backend_dev/gettabledata.php`

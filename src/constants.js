@@ -3,6 +3,8 @@ export const AUDIT_IMAGE_STORAGE_KEY = 'employee-insights-audit-image'
 export const API_ENDPOINT = 'https://backend.jotish.in/backend_dev/gettabledata.php'
 export const LOGIN_USERNAME = 'testuser'
 export const LOGIN_PASSWORD = 'Test123'
+export const API_PAYLOAD_USER = 'test'
+export const API_PAYLOAD_PASS = '123456'
 
 export const CITY_COORDINATES = {
   Mumbai: { x: 79, y: 73, lat: 19.076, lng: 72.8777 },

@@ -1,14 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { API_ENDPOINT, AUDIT_IMAGE_STORAGE_KEY } from '../constants'
+import { API_ENDPOINT, AUDIT_IMAGE_STORAGE_KEY, API_PAYLOAD_USER, API_PAYLOAD_PASS } from '../constants'
 import { normalizeRecord } from '../utils/normalize'
 
 export const DataContext = createContext(null)
 
-function getInitialAuditImage() {
+function getInitialAuditImages() {
   try {
-    return localStorage.getItem(AUDIT_IMAGE_STORAGE_KEY) ?? ''
+    const saved = localStorage.getItem(AUDIT_IMAGE_STORAGE_KEY)
+    return saved ? JSON.parse(saved) : {}
   } catch {
-    return ''
+    return {}
   }
 }
 
@@ -16,15 +17,18 @@ export function DataProvider({ children }) {
   const [employees, setEmployees] = useState([])
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
-  const [auditImage, setAuditImage] = useState(getInitialAuditImage)
+  const [auditImages, setAuditImages] = useState(getInitialAuditImages)
 
   useEffect(() => {
-    if (auditImage) {
-      localStorage.setItem(AUDIT_IMAGE_STORAGE_KEY, auditImage)
-    } else {
-      localStorage.removeItem(AUDIT_IMAGE_STORAGE_KEY)
-    }
-  }, [auditImage])
+    localStorage.setItem(AUDIT_IMAGE_STORAGE_KEY, JSON.stringify(auditImages))
+  }, [auditImages])
+
+  const setEmployeeAuditImage = useCallback((id, imageData) => {
+    setAuditImages((prev) => ({
+      ...prev,
+      [id]: imageData,
+    }))
+  }, [])
 
   const fetchEmployees = useCallback(async () => {
     setStatus('loading')
@@ -34,7 +38,7 @@ export function DataProvider({ children }) {
       const response = await fetch(API_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'test', password: '123456' }),
+        body: JSON.stringify({ username: API_PAYLOAD_USER, password: API_PAYLOAD_PASS }),
       })
 
       if (!response.ok) {
@@ -48,11 +52,32 @@ export function DataProvider({ children }) {
           ? payload.data
           : Array.isArray(payload?.result)
             ? payload.result
-            : []
+            : Array.isArray(payload?.TABLE_DATA?.data)
+              ? payload.TABLE_DATA.data
+              : []
 
-      setEmployees(list.map(normalizeRecord))
+      if (list.length === 0) {
+        throw new Error('API returned empty dataset')
+      }
+
+      const normalizedList = list.map((item, index) => {
+        // If the item is an array (like the current API returns), convert to object
+        if (Array.isArray(item)) {
+          return normalizeRecord({
+            name: item[0],
+            department: item[1],
+            city: item[2],
+            id: item[3],
+            salary: item[5]
+          }, index)
+        }
+        return normalizeRecord(item, index)
+      })
+
+      setEmployees(normalizedList)
       setStatus('success')
     } catch (fetchError) {
+      console.error('Fetch error:', fetchError)
       const fallback = Array.from({ length: 3000 }, (_, index) =>
         normalizeRecord(
           {
@@ -78,8 +103,15 @@ export function DataProvider({ children }) {
   }, [fetchEmployees])
 
   const value = useMemo(
-    () => ({ employees, status, error, fetchEmployees, auditImage, setAuditImage }),
-    [auditImage, employees, error, fetchEmployees, status],
+    () => ({
+      employees,
+      status,
+      error,
+      fetchEmployees,
+      auditImages,
+      setEmployeeAuditImage,
+    }),
+    [auditImages, employees, error, fetchEmployees, setEmployeeAuditImage, status],
   )
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

@@ -6,13 +6,14 @@ import { normalizeRecord } from '../utils/normalize'
 export default function DetailsPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { employees, setAuditImage } = useEmployeeData()
+  const { employees, setEmployeeAuditImage } = useEmployeeData()
   const employee =
     employees.find((e) => e.id === String(id)) ?? normalizeRecord({ id }, Number(id) || 1)
 
   const videoRef = useRef(null)
   const photoCanvasRef = useRef(null)
   const signatureCanvasRef = useRef(null)
+  const fileInputRef = useRef(null)
   const streamRef = useRef(null)
   const [cameraState, setCameraState] = useState('idle') // idle | loading | ready | denied
   const [capturedPhoto, setCapturedPhoto] = useState('')
@@ -71,9 +72,20 @@ export default function DetailsPage() {
     stopCamera()
   }
 
-  // Translates a mouse / touch event into canvas-local coordinates,
-  // accounting for any CSS scaling between the canvas display size and its
-  // internal resolution (canvas.width / canvas.height attributes).
+  function handleFileUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      setCapturedPhoto(event.target.result)
+      setMergeStatus('')
+      stopCamera()
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // Translates a mouse / touch event into canvas-local coordinates
   function getPoint(event) {
     const canvas = signatureCanvasRef.current
     if (!canvas) return null
@@ -137,36 +149,35 @@ export default function DetailsPage() {
       return
     }
 
-    const baseCanvas = photoCanvasRef.current
     const signatureCanvas = signatureCanvasRef.current
-    if (!baseCanvas || !signatureCanvas) return
-
-    const exportCanvas = document.createElement('canvas')
-    exportCanvas.width = baseCanvas.width
-    exportCanvas.height = baseCanvas.height
-    const ctx = exportCanvas.getContext('2d')
+    if (!signatureCanvas) return
 
     const photo = new Image()
     photo.src = capturedPhoto
 
-    // Await photo load before compositing
     await new Promise((resolve) => {
       photo.onload = resolve
     })
 
+    const exportCanvas = document.createElement('canvas')
+    // Set internal resolution based on original photo dimensions if available
+    exportCanvas.width = photo.naturalWidth || 640
+    exportCanvas.height = photo.naturalHeight || 480
+    const ctx = exportCanvas.getContext('2d')
+
     // Layer 1: base photo
     ctx.drawImage(photo, 0, 0, exportCanvas.width, exportCanvas.height)
-    // Layer 2: signature canvas (same intrinsic dimensions as photo canvas)
+    // Layer 2: signature (scaled to match photo dimensions)
     ctx.drawImage(signatureCanvas, 0, 0, exportCanvas.width, exportCanvas.height)
     // Layer 3: verification watermark
     ctx.fillStyle = 'rgba(17, 24, 39, 0.78)'
-    ctx.fillRect(16, exportCanvas.height - 54, 280, 38)
+    ctx.fillRect(16, exportCanvas.height - 70, 320, 48)
     ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 15px sans-serif'
-    ctx.fillText(`✓ Verified: ${employee.name}`, 28, exportCanvas.height - 29)
+    ctx.font = 'bold 18px sans-serif'
+    ctx.fillText(`✓ Verified: ${employee.name}`, 28, exportCanvas.height - 38)
 
     const merged = exportCanvas.toDataURL('image/png')
-    setAuditImage(merged)
+    setEmployeeAuditImage(employee.id, merged)
     setMergeStatus('Audit image merged successfully.')
     navigate('/analytics')
   }
@@ -178,8 +189,8 @@ export default function DetailsPage() {
           <p className="eyebrow">Verification Protocol</p>
           <h2>Identity Verification Terminal</h2>
           <p className="muted">
-            Execute secure biometric capture and electronic signature sequence to generate a
-            cryptographically-merged audit asset.
+            Execute secure biometric capture or upload a file, then provide an electronic signature to generate 
+            merged audit asset.
           </p>
         </div>
         <Link className="secondary-button" to="/list" style={{ display: 'flex', alignItems: 'center' }}>
@@ -208,22 +219,42 @@ export default function DetailsPage() {
 
       <div className="detail-layout">
         <div className="panel media-panel" style={{ padding: 'var(--sp-8)' }}>
-          <div className="media-header" style={{ marginBottom: 'var(--sp-6)' }}>
-            <h3>Biometric Capture Stage</h3>
-            <p className="muted">Position the employee within the frame before initiating capture.</p>
+          <div className="media-header" style={{ marginBottom: 'var(--sp-6)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3>Biometric Capture Stage</h3>
+              <p className="muted">Capture via camera or upload an existing legal document image.</p>
+            </div>
+            {!capturedPhoto && (
+              <button 
+                className="secondary-button" 
+                onClick={() => fileInputRef.current?.click()}
+                style={{ fontSize: '0.75rem' }}
+              >
+                Upload File
+              </button>
+            )}
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              style={{ display: 'none' }} 
+              accept="image/*" 
+              onChange={handleFileUpload} 
+            />
           </div>
 
-          <div className="camera-stage" style={{ background: '#000', borderRadius: 'var(--radius-xl)', boxShadow: 'inset 0 0 40px rgba(0,0,0,0.8)' }}>
+          <div className="camera-stage" style={{ background: '#000', borderRadius: 'var(--radius-xl)', boxShadow: 'inset 0 0 40px rgba(0,0,0,0.8)', position: 'relative' }}>
             {!capturedPhoto ? (
               <>
                 <video ref={videoRef} autoPlay muted playsInline className="camera-video" />
                 {cameraState === 'idle' && (
                   <div className="camera-placeholder">
                     <div className="camera-icon" style={{ fontSize: '4rem', marginBottom: '16px' }}>❂</div>
-                    <p style={{ fontSize: '1.1rem' }}>Optical Sensor <strong>DISCONNECTED</strong></p>
-                    <button className="primary-button" onClick={startCamera} style={{ marginTop: '20px' }}>
-                      Initialize Camera
-                    </button>
+                    <p style={{ fontSize: '1.1rem' }}>Optical Sensor <strong>STANDBY</strong></p>
+                    <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                      <button className="primary-button" onClick={startCamera}>
+                        Initialize Camera
+                      </button>
+                    </div>
                   </div>
                 )}
                 {cameraState === 'loading' && (
@@ -235,7 +266,7 @@ export default function DetailsPage() {
                 {cameraState === 'denied' && (
                   <div className="camera-placeholder camera-denied">
                     <p style={{ fontWeight: 600 }}>[ ACCESS_DENIED ]</p>
-                    <p className="muted">Please authorize camera access in your browser settings.</p>
+                    <p className="muted">Please authorize camera access or use the "Upload File" option.</p>
                   </div>
                 )}
                 {cameraState === 'ready' && (
@@ -247,14 +278,15 @@ export default function DetailsPage() {
                 )}
               </>
             ) : (
-              <div className="capture-wrapper" style={{ animation: 'popIn 0.4s cubic-bezier(0,0,0.2,1.2)' }}>
-                <img className="captured-photo" src={capturedPhoto} alt="Captured audit frame" />
+              <div className="capture-wrapper" style={{ animation: 'popIn 0.4s cubic-bezier(0,0,0.2,1.2)', width: '100%', height: '100%', overflow: 'hidden' }}>
+                <img className="captured-photo" src={capturedPhoto} alt="Captured audit frame" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 <div className="signature-overlay-label">Electronic Signature Overlay</div>
                 <canvas
                   className="signature-overlay"
-                  height="480"
                   ref={signatureCanvasRef}
                   width="640"
+                  height="480"
+                  style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}
                   onMouseDown={beginDrawing}
                   onMouseMove={draw}
                   onMouseUp={endDrawing}
@@ -270,8 +302,10 @@ export default function DetailsPage() {
 
           <div className="status-row" style={{ marginTop: 'var(--sp-6)', padding: 'var(--sp-4)', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-md)' }}>
             <div className="status-indicator">
-              <span>Sensor Status:</span>
-              <strong className={`cam-state cam-${cameraState}`}>{cameraState.toUpperCase()}</strong>
+              <span>Source:</span>
+              <strong style={{ color: capturedPhoto ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+                {capturedPhoto ? 'ASSET_LOADED' : 'PENDING'}
+              </strong>
             </div>
             <div className="status-indicator">
               <span>Auth Signature:</span>
@@ -282,8 +316,8 @@ export default function DetailsPage() {
           </div>
 
           <div className="media-actions" style={{ marginTop: 'var(--sp-6)' }}>
-            <button className="secondary-button" onClick={clearSignature} style={{ flex: 1 }}>
-              Reset Signature
+            <button className="secondary-button" onClick={() => { setCapturedPhoto(''); setHasSignature(false); stopCamera(); }} style={{ flex: 1 }}>
+              Reset All
             </button>
             <button
               className="primary-button"
@@ -291,7 +325,7 @@ export default function DetailsPage() {
               style={{ flex: 2, background: 'var(--color-success)', color: '#fff' }}
               disabled={!capturedPhoto || !hasSignature}
             >
-              Merge & Continue Process ➔
+              Finalize Audit & Merge ➔
             </button>
           </div>
 
@@ -302,25 +336,21 @@ export default function DetailsPage() {
           <h3 style={{ color: 'var(--color-accent)' }}>Audit Workflow</h3>
           <ul className="audit-workflow-list">
             <li>
-              <strong>01. Sensor Initialization</strong>
-              <p>Establishing secure link to integrated optical hardware.</p>
+              <strong>01. Asset Acquisition</strong>
+              <p>Initialize camera sensor or upload high-resolution image file.</p>
             </li>
             <li>
-              <strong>02. Frame Capture</strong>
-              <p>Storing high-resolution biometric frame into temporary buffer.</p>
+              <strong>02. Signature Assertion</strong>
+              <p>Manual signature input required over the acquired asset layer.</p>
             </li>
             <li>
-              <strong>03. Legal Affirmation</strong>
-              <p>Manual signature input required over the captured asset.</p>
-            </li>
-            <li>
-              <strong>04. Final Composite</strong>
-              <p>Bit-level merging of photo and signature layers.</p>
+              <strong>03. Ledger Processing</strong>
+              <p>Bit-level merging and storage into the local encrypted manifest.</p>
             </li>
           </ul>
 
-          <div className="tip-box" style={{ background: 'var(--color-surface-2)', borderLeft: '4px solid var(--color-accent)' }}>
-            <strong>System Note:</strong> The final composited manifest will be stored in your local session and will be visible on the Analytics screen for final review.
+          <div className="tip-box" style={{ background: 'var(--color-surface-2)', borderLeft: '4px solid var(--color-accent)', padding: 'var(--sp-4)' }}>
+            <strong>System Note:</strong> The final composited manifest will be stored and linked to this employee's record across the platform.
           </div>
         </div>
       </div>
@@ -346,8 +376,12 @@ export default function DetailsPage() {
         .capture-trigger:hover { transform: scale(1.1); }
         .trigger-inner { width: 100%; height: 100%; border-radius: 50%; background: #fff; }
         
+        .signature-overlay { width: 100%; height: 100%; cursor: crosshair; }
         .signature-overlay-label { position: absolute; top: 12px; left: 12px; font-size: 0.65rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.1em; pointer-events: none; }
         
+        .sig-present { color: var(--color-success); }
+        .sig-missing { color: var(--color-warning); }
+
         button:disabled { opacity: 0.3; cursor: not-allowed; }
       `}</style>
     </section>
