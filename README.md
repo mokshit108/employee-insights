@@ -16,6 +16,37 @@ A 4-screen React + Vite dashboard demonstrating auth persistence, custom DOM vir
 
 ---
 
+## Getting Started
+
+### Prerequisites
+- **Node.js**: v18.0.0 or higher
+- **npm**: v9.0.0 or higher
+
+### Installation
+
+1. **Clone the repository**:
+   ```bash
+   git clone <repository-url>
+   cd employee-insights-dashboard
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+### Running Locally
+
+1. **Start the development server**:
+   ```bash
+   npm run dev
+   ```
+
+2. **Access the application**:
+   Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+---
+
 ## Screens
 
 | # | Route | Description |
